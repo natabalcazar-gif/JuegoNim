@@ -11,6 +11,31 @@ st.title("🪵 Juego NIM")
 st.markdown("**Reglas:** Los jugadores toman turnos sacando 1, 2 o 3 fichas. El que tome la última gana.")
 
 # ── Session State ──────────────────────────────────────────────────────────────
+
+if "algorithm" not in st.session_state:
+    st.session_state.algorithm = None  # None = aún no ha elegido
+
+# ── Pantalla de selección ANTES del juego ────────────────────────────────────
+if st.session_state.algorithm is None:
+    st.subheader("⚙️ Elige el algoritmo de la máquina")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("### 🧠 MiniMax")
+        st.markdown("Explora **todos** los nodos del árbol sin podar.")
+        if st.button("Jugar con MiniMax", use_container_width=True):
+            st.session_state.algorithm = "minimax"
+            st.rerun()
+    with col2:
+        st.markdown("### ✂️ Alpha-Beta")
+        st.markdown("Poda ramas innecesarias, **más eficiente**.")
+        if st.button("Jugar con Alpha-Beta", use_container_width=True):
+            st.session_state.algorithm = "alphabeta"
+            st.rerun()
+    st.stop()  # No muestra nada más hasta que elija
+
+
+
+
 if "tokens" not in st.session_state:
     st.session_state.tokens = INIT_STATE
 if "turn" not in st.session_state:
@@ -31,6 +56,7 @@ def reset_game():
     st.session_state.log = []
     st.session_state.game_over = False
     st.session_state.winner = None
+    st.session_state.algorithm = None  # vuelve a pedir algoritmo
 
 def machine_move(tokens):
     # Si puede tomar todo de una vez, lo hace
@@ -40,7 +66,13 @@ def machine_move(tokens):
     """Devuelve cuántas fichas saca la máquina usando miniMax."""
     node = NimNode(True, value="inicio", state=tokens, operators=OPERATORS)
     tree = Tree(node, OPERATORS)
-    best = tree.miniMax(DEPTH)
+
+
+    if st.session_state.algorithm == "alphabeta":
+            best = tree.alphaBeta(DEPTH)
+    else:
+            best = tree.miniMax(DEPTH)
+        
     taken = tokens - best.state
 
 

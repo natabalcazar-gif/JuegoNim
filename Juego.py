@@ -126,6 +126,54 @@ class Tree ():
           value=min(value,self.miniMaxR(newChild,depth-1,True))
     node.v=value
     return value
+  
+  def miniMaxAlphaBeta(self, depth, bonus_base, bonus_factor):
+    self.root.bonus_base = bonus_base
+    self.root.bonus_factor = bonus_factor
+    self.root.v=self.miniMaxRAlphaBeta(self.root, depth, True, float('-inf'), float('inf'))
+    ## Comparar los hijos de root
+    values=[c.v for c in self.root.children]
+    maxvalue=max(values)
+    index=values.index(maxvalue)
+    return self.root.children[index]
+
+  def miniMaxRAlphaBeta(self, node, depth, maxPlayer, alpha, beta):
+    if depth==0 or node.isObjective():
+      node.v=node.heuristic()
+      return node.heuristic()
+    ## Generar los hijos del nodo
+    children=node.getchildrens()
+
+    ## Según el jugador que sea en el árbol
+    if maxPlayer:
+      value=float('-inf')
+      for i,child in enumerate(children):
+        if child is not None:
+          if beta <= alpha:
+            break
+          newChild=type(self.root)(value=node.value+'-'+str(i),state=child,operator=i,parent=node,
+                                   operators=node.operators,player=False, bonus_base=node.bonus_base, bonus_factor = node.bonus_factor)
+          newChild=node.add_node_child(newChild)
+          value=max(value,self.miniMaxRAlphaBeta(newChild,depth-1,False, alpha, beta))
+          alpha = max(alpha, value)
+
+      #node.v=value
+      #return value
+    else:
+      value=float('inf')
+      for i,child in enumerate(children):
+        if child is not None:
+          if beta <= alpha:
+            break
+          newChild=type(self.root)(value=node.value+'-'+str(i),state=child,operator=i,parent=node,
+                                   operators=node.operators,player=True, bonus_base=node.bonus_base, bonus_factor = node.bonus_factor)
+          newChild=node.add_node_child(newChild)
+          value=min(value,self.miniMaxRAlphaBeta(newChild,depth-1,True, alpha, beta))
+          beta = min(beta, value)
+
+    node.v=value
+    return value
+
 
   ## Método para dibujar el árbol
   def draw(self,path):
