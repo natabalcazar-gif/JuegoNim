@@ -1,9 +1,10 @@
+
 import streamlit as st
 import random
-from Juego import NimNode, Tree
+from Juego import NimNode, NimNodeMisere, Tree
 
 OPERATORS = [1, 2, 3]
-INIT_STATE = 25
+DEFAULT_INIT_STATE = 25
 
 LEVELS = {
     "🟢 Fácil":   {"depth": 1, "bonus_base": 10, "bonus_factor": 1},
@@ -11,91 +12,101 @@ LEVELS = {
     "🔴 Difícil": {"depth": 8, "bonus_base": 50, "bonus_factor": 5},
 }
 
+VARIANTS = {
+    "🏆 Clásico": {
+        "label": "Clásico",
+        "description": "El que tome la **última** ficha **gana**.",
+        "node_class": NimNode,
+    },
+    "💀 Misère": {
+        "label": "Misère",
+        "description": "El que tome la **última** ficha **pierde**.",
+        "node_class": NimNodeMisere,
+    },
+}
+
 st.set_page_config(page_title="Juego NIM", page_icon="🪵")
 st.title("🪵 Juego NIM")
-st.markdown("**Reglas:** Los jugadores toman turnos sacando 1, 2 o 3 fichas. El que tome la última gana.")
 
 # ── Session State ──────────────────────────────────────────────────────────────
-if "tokens" not in st.session_state:
-    st.session_state.tokens = INIT_STATE
-if "turn" not in st.session_state:
-    st.session_state.turn = "human"
-if "log" not in st.session_state:
-    st.session_state.log = []
-if "game_over" not in st.session_state:
-    st.session_state.game_over = False
-if "winner" not in st.session_state:
-    st.session_state.winner = None
-if "game_started" not in st.session_state:
-    st.session_state.game_started = False
-if "config" not in st.session_state:
-    st.session_state.config = None
-if "algorithm" not in st.session_state:
-    st.session_state.algorithm = None
-if "spin_result" not in st.session_state:
-    st.session_state.spin_result = None
-if "first_player" not in st.session_state:
-    st.session_state.first_player = None
-# Contadores
-if "wins_human" not in st.session_state:
-    st.session_state.wins_human = 0
-if "wins_machine" not in st.session_state:
-    st.session_state.wins_machine = 0
-if "game_count" not in st.session_state:
-    st.session_state.game_count = 0
+defaults = {
+    "tokens": DEFAULT_INIT_STATE,
+    "init_state": DEFAULT_INIT_STATE,
+    "turn": "human",
+    "log": [],
+    "game_over": False,
+    "winner": None,
+    "game_started": False,
+    "config": None,
+    "algorithm": None,
+    "variant": None,
+    "spin_result": None,
+    "first_player": None,
+    "wins_human_clasico": 0,
+    "wins_machine_clasico": 0,
+    "game_count_clasico": 0,
+    "wins_human_misere": 0,
+    "wins_machine_misere": 0,
+    "game_count_misere": 0,
+}
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+def variant_key():
+    return "misere" if st.session_state.variant == "💀 Misère" else "clasico"
+
 def spin_wheel():
     result = random.choice(["human", "machine"])
     st.session_state.spin_result = result
     st.session_state.first_player = result
 
-def start_game(nivel, algoritmo):
+def start_game(nivel, algoritmo, variante, init_tokens):
     st.session_state.config = LEVELS[nivel]
     st.session_state.algorithm = algoritmo
-    st.session_state.tokens = INIT_STATE
+    st.session_state.variant = variante
+    st.session_state.init_state = init_tokens
+    st.session_state.tokens = init_tokens
     st.session_state.turn = st.session_state.first_player
     st.session_state.log = []
     st.session_state.game_over = False
     st.session_state.winner = None
     st.session_state.game_started = True
-    st.session_state.game_count += 1
+    key = variant_key()
+    st.session_state[f"game_count_{key}"] += 1
 
 def rematch():
-    """Alterna quién empieza respecto a la partida anterior y reinicia."""
     prev = st.session_state.first_player
     next_first = "machine" if prev == "human" else "human"
     st.session_state.first_player = next_first
     st.session_state.spin_result = next_first
-    st.session_state.tokens = INIT_STATE
+    st.session_state.tokens = st.session_state.init_state
     st.session_state.turn = next_first
     st.session_state.log = []
     st.session_state.game_over = False
     st.session_state.winner = None
     st.session_state.game_started = True
-    st.session_state.game_count += 1
+    key = variant_key()
+    st.session_state[f"game_count_{key}"] += 1
 
 def reset_game():
-    """Vuelve a la pantalla de configuración y resetea todo."""
-    st.session_state.game_started = False
-    st.session_state.config = None
-    st.session_state.algorithm = None
-    st.session_state.tokens = INIT_STATE
+    for k in ["game_started", "config", "algorithm", "variant", "spin_result", "first_player",
+              "game_over", "winner"]:
+        st.session_state[k] = defaults[k]
+    st.session_state.tokens = st.session_state.init_state
     st.session_state.turn = "human"
     st.session_state.log = []
-    st.session_state.game_over = False
-    st.session_state.winner = None
-    st.session_state.spin_result = None
-    st.session_state.first_player = None
-    st.session_state.wins_human = 0
-    st.session_state.wins_machine = 0
-    st.session_state.game_count = 0
 
 def machine_move(tokens):
     if tokens <= max(OPERATORS):
+        if st.session_state.variant == "💀 Misère":
+            return max(1, tokens - 1)
         return tokens
+
     config = st.session_state.config
-    node = NimNode(True, value="inicio", state=tokens, operators=OPERATORS)
+    NodeClass = VARIANTS[st.session_state.variant]["node_class"]
+    node = NodeClass(True, value="inicio", state=tokens, operators=OPERATORS)
     tree = Tree(node, OPERATORS)
     if st.session_state.algorithm == "MiniMax":
         best = tree.miniMax(config["depth"], config["bonus_base"], config["bonus_factor"])
@@ -106,14 +117,17 @@ def machine_move(tokens):
 def apply_move(taken):
     st.session_state.tokens -= taken
     st.session_state.log.append((st.session_state.turn, taken, st.session_state.tokens))
+
     if st.session_state.tokens == 0:
         st.session_state.game_over = True
-        st.session_state.winner = st.session_state.turn
-        # Actualizar contador
-        if st.session_state.turn == "human":
-            st.session_state.wins_human += 1
+        key = variant_key()
+        if st.session_state.variant == "💀 Misère":
+            loser = st.session_state.turn
+            winner = "machine" if loser == "human" else "human"
         else:
-            st.session_state.wins_machine += 1
+            winner = st.session_state.turn
+        st.session_state.winner = winner
+        st.session_state[f"wins_{winner}_{key}"] += 1
     else:
         st.session_state.turn = "machine" if st.session_state.turn == "human" else "human"
 
@@ -121,22 +135,46 @@ def apply_move(taken):
 if not st.session_state.game_started:
     st.subheader("⚙️ Configuración de la partida")
 
+    # Variante
+    variante = st.radio("Selecciona la variante:", list(VARIANTS.keys()), horizontal=True)
+    st.caption(VARIANTS[variante]["description"])
+
+    st.divider()
+
+    # Fichas iniciales
+    init_tokens = st.slider(
+        "Fichas iniciales:",
+        min_value=20,
+        max_value=50,
+        value=DEFAULT_INIT_STATE,
+        step=1,
+        help="Número de fichas con las que empieza la partida."
+    )
+    mod = init_tokens % (max(OPERATORS) + 1)
+    if mod == 0:
+        st.caption(f"⚠️ {init_tokens} es múltiplo de 4 — quien empieza está en **posición perdedora** en Clásico.")
+    else:
+        st.caption(f"✅ {init_tokens} no es múltiplo de 4 — quien empieza tiene **ventaja** en Clásico.")
+
+    st.divider()
+
+    # Dificultad
     nivel = st.radio("Selecciona la dificultad:", list(LEVELS.keys()), horizontal=True)
     cfg = LEVELS[nivel]
     st.caption(f"Profundidad: `{cfg['depth']}` · Bonus Base: `{cfg['bonus_base']}` · Bonus Factor: `{cfg['bonus_factor']}`")
 
     st.divider()
 
+    # Algoritmo
     algoritmo = st.radio("Selecciona el algoritmo:", ["MiniMax", "MiniMax Alpha-Beta"], horizontal=True)
 
     st.divider()
 
+    # Ruleta
     st.subheader("🎰 ¿Quién empieza?")
     col_spin, col_result = st.columns([1, 2])
-
     with col_spin:
         st.button("🎰 ¡Girar ruleta!", on_click=spin_wheel)
-
     with col_result:
         if st.session_state.spin_result is None:
             st.info("Gira la ruleta para decidir quién empieza.")
@@ -148,31 +186,39 @@ if not st.session_state.game_started:
     st.divider()
 
     if st.session_state.first_player is not None:
-        st.button("🚀 ¡Comenzar partida!", on_click=start_game, args=(nivel, algoritmo))
+        st.button("🚀 ¡Comenzar partida!", on_click=start_game, args=(nivel, algoritmo, variante, init_tokens))
     else:
         st.button("🚀 ¡Comenzar partida!", disabled=True)
 
 # ── Juego ──────────────────────────────────────────────────────────────────────
 else:
-    # Sidebar con info y marcador
+    vkey = variant_key()
+    variant_info = VARIANTS[st.session_state.variant]
+
+    # Sidebar
     st.sidebar.header("📌 Partida actual")
     st.sidebar.markdown(f"""
-    **Dificultad:** {[k for k,v in LEVELS.items() if v == st.session_state.config][0]}  
-    **Algoritmo:** `{st.session_state.algorithm}`  
-    **Profundidad:** `{st.session_state.config['depth']}`  
-    **Empieza:** {"👤 Humano" if st.session_state.first_player == "human" else "🤖 Máquina"}
+**Variante:** {st.session_state.variant}
+**Fichas iniciales:** `{st.session_state.init_state}`
+**Dificultad:** {[k for k,v in LEVELS.items() if v == st.session_state.config][0]}
+**Algoritmo:** `{st.session_state.algorithm}`
+**Profundidad:** `{st.session_state.config['depth']}`
+**Empieza:** {"👤 Humano" if st.session_state.first_player == "human" else "🤖 Máquina"}
     """)
 
     st.sidebar.divider()
     st.sidebar.header("🏆 Marcador")
-    st.sidebar.markdown(f"""
-    **Partidas jugadas:** `{st.session_state.game_count}`  
-    👤 Humano: `{st.session_state.wins_human}`  
-    🤖 Máquina: `{st.session_state.wins_machine}`  
-    """)
+    for v_key, v_label in [("clasico", "🏆 Clásico"), ("misere", "💀 Misère")]:
+        st.sidebar.markdown(f"**{v_label}** — Partidas: `{st.session_state[f'game_count_{v_key}']}`")
+        c1, c2 = st.sidebar.columns(2)
+        c1.metric("👤 Humano", st.session_state[f"wins_human_{v_key}"])
+        c2.metric("🤖 Máquina", st.session_state[f"wins_machine_{v_key}"])
 
     st.sidebar.divider()
     st.sidebar.button("🔄 Nueva configuración", on_click=reset_game)
+
+    # Regla activa
+    st.info(f"{st.session_state.variant} — {variant_info['description']}")
 
     # Turno de la máquina
     if st.session_state.turn == "machine" and not st.session_state.game_over:
@@ -180,9 +226,9 @@ else:
         apply_move(taken)
         st.rerun()
 
-    # UI Principal
+    # Tablero
     tokens = st.session_state.tokens
-    st.subheader(f"Fichas restantes: {tokens}")
+    st.subheader(f"Fichas restantes: {tokens} / {st.session_state.init_state}")
     if tokens > 0:
         cols = st.columns(min(tokens, 25))
         for i in range(tokens):
@@ -192,9 +238,10 @@ else:
 
     st.divider()
 
+    # Resultado o botones
     if st.session_state.game_over:
         if st.session_state.winner == "human":
-            st.success("🙅🏽‍♂️ ¡Ganó el humano! 🎉")
+            st.success("👤 ¡Ganó el humano! 🎉")
         else:
             st.error("🤖 ¡Ganó la máquina! 🎉")
 
@@ -206,7 +253,6 @@ else:
             st.button("🔁 Revancha", on_click=rematch)
         with col_reset:
             st.button("🏠 Cambiar configuración", on_click=reset_game)
-
     else:
         if st.session_state.turn == "human":
             st.subheader("Tu turno — ¿Cuántas fichas tomas?")

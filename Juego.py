@@ -2,8 +2,6 @@ import pydot
 from IPython.display import Image, display
 import queue
 import numpy as np
-
-
 class Node ():
   def __init__(self, state,value,operators,operator=None, parent=None,objective=None):
     self.state= state
@@ -59,13 +57,14 @@ class Node ():
           n=n.parent
       return result
 
+  def heuristic(self):
+    return 0
+
 
   ### Crear método para criterio objetivo
   ### Por defecto vamos a poner que sea igual al estado objetivo, para cada caso se puede sobreescribir la función
   def isObjective(self):
     return (self.state==self.objetive.state)
-
-
 class Tree ():
   def __init__(self, root ,operators):
     self.root=root
@@ -90,7 +89,9 @@ class Tree ():
     self.root.level=0
 
 
-  def miniMax(self, depth):
+  def miniMax(self, depth, bonus_base, bonus_factor):
+    self.root.bonus_base = bonus_base
+    self.root.bonus_factor = bonus_factor
     self.root.v=self.miniMaxR(self.root, depth, True)
     ## Comparar los hijos de root
     values=[c.v for c in self.root.children]
@@ -111,7 +112,7 @@ class Tree ():
       for i,child in enumerate(children):
         if child is not None:
           newChild=type(self.root)(value=node.value+'-'+str(i),state=child,operator=i,parent=node,
-                                   operators=node.operators,player=False)
+                                   operators=node.operators,player=False, bonus_base=node.bonus_base, bonus_factor = node.bonus_factor)
           newChild=node.add_node_child(newChild)
           value=max(value,self.miniMaxR(newChild,depth-1,False))
       #node.v=value
@@ -121,12 +122,13 @@ class Tree ():
       for i,child in enumerate(children):
         if child is not None:
           newChild=type(self.root)(value=node.value+'-'+str(i),state=child,operator=i,parent=node,
-                                   operators=node.operators,player=True)
+                                   operators=node.operators,player=True, bonus_base=node.bonus_base, bonus_factor = node.bonus_factor)
           newChild=node.add_node_child(newChild)
           value=min(value,self.miniMaxR(newChild,depth-1,True))
     node.v=value
     return value
-  
+
+
   def miniMaxAlphaBeta(self, depth, bonus_base, bonus_factor):
     self.root.bonus_base = bonus_base
     self.root.bonus_factor = bonus_factor
@@ -174,7 +176,6 @@ class Tree ():
     node.v=value
     return value
 
-
   ## Método para dibujar el árbol
   def draw(self,path):
     graph = pydot.Dot(graph_type='graph')
@@ -205,11 +206,8 @@ class Tree ():
       return graph
     else:
       return graph
-    
-    
-#Clase NODE para NIM
 class NimNode(Node):
-  def __init__(self, player=True,**kwargs):
+  def __init__(self, player=True, bonus_base = 50, bonus_factor = 5,**kwargs):
     super(NimNode, self).__init__(**kwargs)
     self.player=player
     # True para max, False para Min
@@ -217,6 +215,8 @@ class NimNode(Node):
       self.v=float('-inf')
     else:
       self.v=float('inf')
+    self.bonus_base = bonus_base
+    self.bonus_factor = bonus_factor
 
   def repeatStatePath(self, state):
     return False
@@ -235,8 +235,12 @@ class NimNode(Node):
     # The current player can take all remaining tokens and win
     return self.state <= max(self.operators)
 
-  def heuristic(self):
+  def heuristic(self, bonus_base=None, bonus_factor=None):
+    bb = bonus_base if bonus_base is not None else self.bonus_base
+    bf = bonus_factor if bonus_factor is not None else self.bonus_factor
+
     tokens = self.state
+    module = max(self.operators) + 1  # in this case 4
 
     # No tokens left
     if tokens == 0:
@@ -244,11 +248,79 @@ class NimNode(Node):
 
     # Few tokens left
     if tokens <= max(self.operators):
-      return 100 if self.player else -100
+      # Depth penalty: winning earlier is worth more
+      bonus = max(0,bb - self.level*bf)
+      return (100 + bonus) if self.player else -(100 + bonus)
 
-    # Intermediate position: multiples of (max+1) are losing positions
-    modulo = max(self.operators) + 1  # in this case 4
-    if tokens % modulo == 0:
-        return -10 if self.player else 10
+    # Intermediate position
+    distance = tokens % module
+
+    if distance == 0:
+        # Losing position: the more chips left, the worse (further from recovering)
+        score = -10 - (tokens // module) *2
     else:
-        return 10 if self.player else -10
+        # Winning position: the closer to the next multiple, the better
+        score = 10 + (module - distance) * 3
+
+    return score if self.player else -score
+initState = 13
+operators = [3,2,1]
+levels = {
+    "Easy": {
+        "depth": 1,
+        "bonus_base": 10,
+        "bonus_factor": 1
+    },
+    "Medium": {
+        "depth": 3,
+        "bonus_base": 30,
+        "bonus_factor": 3
+    },
+    "Hard": {
+        "depth": 8,
+        "bonus_base": 50,
+        "bonus_factor": 5
+    },
+}
+
+class NimNodeMisere(NimNode):
+    """
+    Variante Misère: quien toma la última ficha PIERDE.
+    La estrategia óptima es casi idéntica al Nim clásico,
+    excepto al final: evitar ser quien tome el último token.
+    """
+
+    def isObjective(self):
+        # El juego termina cuando quedan 0 tokens (alguien ya tomó el último)
+        # O cuando el estado actual OBLIGA al jugador a tomar el último
+        return self.state == 0 or self.state <= max(self.operators)
+
+    def heuristic(self, bonus_base=None, bonus_factor=None):
+        bb = bonus_base if bonus_base is not None else self.bonus_base
+        bf = bonus_factor if bonus_factor is not None else self.bonus_factor
+
+        tokens = self.state
+        module = max(self.operators) + 1
+
+        # Sin tokens: el jugador anterior tomó el último → jugador anterior PIERDE
+        # → quien llega aquí GANA
+        if tokens == 0:
+            return 100 if self.player else -100
+
+        # Pocos tokens: el jugador ACTUAL se ve obligado a tomar el último → PIERDE
+        if tokens <= max(self.operators):
+            bonus = max(0, bb - self.level * bf)
+            # Invertido respecto al Nim clásico
+            return -(100 + bonus) if self.player else (100 + bonus)
+
+        # Posición intermedia — la estrategia misère difiere del clásico
+        # solo cuando quedan pocos tokens; aquí es prácticamente igual
+        distance = tokens % module
+
+        if distance == 0:
+            # Posición perdedora en Nim clásico → en misère también (con tokens > max)
+            score = -10 - (tokens // module) * 2
+        else:
+            score = 10 + (module - distance) * 3
+
+        return score if self.player else -score
