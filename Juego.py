@@ -3,23 +3,25 @@ from IPython.display import Image, display
 import queue
 import numpy as np
 
-
+#------CLASE------
+#Objeto Principal--> Representa el estado del juego 
 class Node ():
-  def __init__(self, state,value,operators,operator=None, parent=None,objective=None):
-    self.state= state
-    self.value = value
-    self.children = []
+  def __init__(self, state,value,operators,operator=None, parent=None,objective=None): #constructor
+    #--------Atributos------
+    self.state= state #estado actual del juego 
+    self.value = value #identificador del nodo 
+    self.children = [] #lista de hijos
     self.parent=parent
-    self.operator=operator
+    self.operator=operator #movimiento que genero ese nodo
     self.objective=objective
-    self.level=0
-    self.operators=operators
-    self.v=0
+    self.level=0 #profundidad
+    self.operators=operators #movimientos posibles 
+    self.v=0 #valor minimax
 
-
-  def add_child(self, value, state, operator):
-    node=type(self)(value=value, state=state, operator=operator,parent=self,operators=self.operators)
-    node.level=node.parent.level+1
+  #-------Metodo-----
+  def add_child(self, value, state, operator): #Creamos un nuevo nodo hijo 
+    node=type(self)(value=value, state=state, operator=operator,parent=self,operators=self.operators) #Creamos un nuevo objeto del mismo tipo que el actual y PERMITE HERENCIA
+    node.level=node.parent.level+1 #calcula la profundidad del arbol
     self.children.append(node)
     return node
 
@@ -27,13 +29,14 @@ class Node ():
     node.level=node.parent.level+1
     self.children.append(node)
     return node
-
+  
+  #-------Metodo-----
   #Devuelve todos los estados según los operadores aplicados
-  def getchildrens(self):
+  def getchildrens(self): #Genera todos los posibles estados aplicando los operadores
     return [
         self.getState(i)
-          if not self.repeatStatePath(self.getState(i))
-            else None for i, op in enumerate(self.operators)]
+          if not self.repeatStatePath(self.getState(i)) #Si el estado no se ha repetido --> lo agrega 
+            else None for i, op in enumerate(self.operators)] #si ya aparecio en el camino --> devuelve None
 
   def getState(self, index):
     pass
@@ -44,9 +47,10 @@ class Node ():
   def __lt__(self, other):
     return self.f() < other.f()
 
-
+  #-------Metodo-----
+  #Con este metodo sabe si ya repitio o no el estado
   def repeatStatePath(self, state):
-      n=self
+      n=self #empieza en el nodo actual
       while n is not None and n.state!=state:
           n=n.parent
       return n is not None
@@ -66,6 +70,8 @@ class Node ():
     return (self.state==self.objetive.state)
 
 
+#------CLASE------
+#Maneja el arbol de busqueda 
 class Tree ():
   def __init__(self, root ,operators):
     self.root=root
@@ -91,7 +97,7 @@ class Tree ():
 
 
   def miniMax(self, depth):
-    self.root.v=self.miniMaxR(self.root, depth, True)
+    self.root.v=self.miniMaxR(self.root, depth, True) #Llamamos a miniMaxR
     ## Comparar los hijos de root
     values=[c.v for c in self.root.children]
     maxvalue=max(values)
@@ -99,15 +105,15 @@ class Tree ():
     return self.root.children[index]
 
   def miniMaxR(self, node, depth, maxPlayer):
-    if depth==0 or node.isObjective():
+    if depth==0 or node.isObjective(): #Si profundidad es igual a cero o estamos en el estado objetivo 
       node.v=node.heuristic()
-      return node.heuristic()
+      return node.heuristic() #Retornamos la heuristica 
     ## Generar los hijos del nodo
     children=node.getchildrens()
 
     ## Según el jugador que sea en el árbol
     if maxPlayer:
-      value=float('-inf')
+      value=float('-inf') #El MAX comienza en -inf
       for i,child in enumerate(children):
         if child is not None:
           newChild=type(self.root)(value=node.value+'-'+str(i),state=child,operator=i,parent=node,
@@ -117,7 +123,7 @@ class Tree ():
       #node.v=value
       #return value
     else:
-      value=float('inf')
+      value=float('inf') #Si hablamos de MIN--> Comienza en inf
       for i,child in enumerate(children):
         if child is not None:
           newChild=type(self.root)(value=node.value+'-'+str(i),state=child,operator=i,parent=node,
@@ -207,10 +213,10 @@ class Tree ():
       return graph
     
     
-#Clase NODE para NIM
-class NimNode(Node):
+#Clase NODE para NIM (especializa Node)
+class NimNode(Node): #HERENCIA--> Hereda todo de Node
   def __init__(self, player=True,**kwargs):
-    super(NimNode, self).__init__(**kwargs)
+    super(NimNode, self).__init__(**kwargs) #Llamamos al constructor de la clase padre
     self.player=player
     # True para max, False para Min
     if player:
@@ -218,12 +224,15 @@ class NimNode(Node):
     else:
       self.v=float('inf')
 
+  #En NimNode sobreescribimos el METODO porque no se deben bloquear estados repetidos
+  # Porque en Nim: Siempre disminuyen las fichas, Nunca puedes volver a un estado anterior, No hay ciclos
   def repeatStatePath(self, state):
     return False
 
   def cost(self):
     return self.level
 
+  #Calculamos cuentas fichas quedan despues de quitar (juega alguien)
   def getState(self, index):
     take = self.operators[index]
     remaining = self.state - take
