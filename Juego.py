@@ -92,7 +92,8 @@ class Tree ():
   def miniMax(self, depth, bonus_base, bonus_factor):
     self.root.bonus_base = bonus_base
     self.root.bonus_factor = bonus_factor
-    self.root.v=self.miniMaxR(self.root, depth, True)
+    self.root.v=self.miniMaxR(self.root, depth, True) #True--> Max
+    # Hasta que el no termine de hacer el metodo no continua
     ## Comparar los hijos de root
     values=[c.v for c in self.root.children]
     maxvalue=max(values)
@@ -100,32 +101,36 @@ class Tree ():
     return self.root.children[index]
 
   def miniMaxR(self, node, depth, maxPlayer):
-    if depth==0 or node.isObjective():
-      node.v=node.heuristic()
+    #Evalua profundidad
+    if depth==0 or node.isObjective(): #condicion de parada
+      node.v=node.heuristic() #Lo que calculo de la heuristica (numero) lo guardo en v 
       return node.heuristic()
+    
+    #Si no es depth=0 se generan los hijos
     ## Generar los hijos del nodo
     children=node.getchildrens()
 
     ## Según el jugador que sea en el árbol
-    if maxPlayer:
+    if maxPlayer: #Para MAX
       value=float('-inf')
       for i,child in enumerate(children):
         if child is not None:
           newChild=type(self.root)(value=node.value+'-'+str(i),state=child,operator=i,parent=node,
                                    operators=node.operators,player=False, bonus_base=node.bonus_base, bonus_factor = node.bonus_factor)
           newChild=node.add_node_child(newChild)
-          value=max(value,self.miniMaxR(newChild,depth-1,False))
+          value=max(value,self.miniMaxR(newChild,depth-1,False)) #Ya genere un hijo--> Una profundidad menos --> DEBE LLEGAR A CERO, ADEMAS PASAMOS A MIN(False)
       #node.v=value
       #return value
-    else:
+
+    else: #Para MIN
       value=float('inf')
       for i,child in enumerate(children):
         if child is not None:
           newChild=type(self.root)(value=node.value+'-'+str(i),state=child,operator=i,parent=node,
                                    operators=node.operators,player=True, bonus_base=node.bonus_base, bonus_factor = node.bonus_factor)
           newChild=node.add_node_child(newChild)
-          value=min(value,self.miniMaxR(newChild,depth-1,True))
-    node.v=value
+          value=min(value,self.miniMaxR(newChild,depth-1,True)) #MAX
+    node.v=value #Al nodo que contenia la heuristica inicial asignele el valor que acabo de calcular
     return value
 
 
@@ -151,7 +156,7 @@ class Tree ():
       value=float('-inf')
       for i,child in enumerate(children):
         if child is not None:
-          if beta <= alpha:
+          if beta <= alpha: #Condicion de parada del metodo Alpha Beta ---> No genero mas hijos para ese nodo 
             break
           newChild=type(self.root)(value=node.value+'-'+str(i),state=child,operator=i,parent=node,
                                    operators=node.operators,player=False, bonus_base=node.bonus_base, bonus_factor = node.bonus_factor)
@@ -242,14 +247,15 @@ class NimNode(Node):
     tokens = self.state
     module = max(self.operators) + 1  # in this case 4
 
+    #tokens--> cantidad de fichas que se tienen 
     # No tokens left
     if tokens == 0:
-      return -100 if self.player else 100
+      return -100 if self.player else 100 #Si el jugador es MAX---> TRUE devuelva 100
 
     # Few tokens left
     if tokens <= max(self.operators):
       # Depth penalty: winning earlier is worth more
-      bonus = max(0,bb - self.level*bf)
+      bonus = max(0,bb - self.level*bf) #level--> Profundidad 
       return (100 + bonus) if self.player else -(100 + bonus)
 
     # Intermediate position
