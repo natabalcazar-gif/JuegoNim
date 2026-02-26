@@ -217,9 +217,9 @@ class NimNode(Node):
     self.player=player
     # True para max, False para Min
     if player:
-      self.v=float('-inf')
+      self.v=float('-inf') #MAX
     else:
-      self.v=float('inf')
+      self.v=float('inf') #MIN
     self.bonus_base = bonus_base
     self.bonus_factor = bonus_factor
 
@@ -261,14 +261,14 @@ class NimNode(Node):
     # Intermediate position
     distance = tokens % module
 
-    if distance == 0:
+    if distance == 0: #Si modulo de 4 es cero, significa que estoy en posicion perderdora
         # Losing position: the more chips left, the worse (further from recovering)
-        score = -10 - (tokens // module) *2
+        score = -10
     else:
         # Winning position: the closer to the next multiple, the better
-        score = 10 + (module - distance) * 3
+        score = 10
 
-    return score if self.player else -score
+    return score if self.player else -score  #Si esta en MAX -True- (maquina) invierto el valor de Score para que termine en posicion perdedora 
 initState = 13
 operators = [3,2,1]
 levels = {
@@ -325,8 +325,8 @@ class NimNodeMisere(NimNode):
 
         if distance == 0:
             # Posición perdedora en Nim clásico → en misère también (con tokens > max)
-            score = -10 - (tokens // module) * 2
+            score = -10
         else:
-            score = 10 + (module - distance) * 3
+            score = 10
 
         return score if self.player else -score
